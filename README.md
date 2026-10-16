@@ -105,6 +105,31 @@ if (path != null) {
 
 ---
 
+## Running the Examples
+
+Two ready-to-run OpModes live in [`docs/examples/`](docs/examples/):
+
+| OpMode | Driver Station name | What it does |
+|--------|---------------------|--------------|
+| `AutoBallHuntOpMode` | HiveVision Weaver Auto | One-shot autonomous: detect, build a Weaver route through the closest 2 targets, drive it. |
+| `ManualBallChaseOpMode` | HiveVision Loop with Obstacles | Detection loop for the whole match; re-plans around an obstacle when the robot is idle. |
+
+To run one:
+
+1. Copy that OpMode plus `SampleFollowerFactory.java` into your TeamCode module
+   (both files already declare `package org.firstinspires.ftc.teamcode`).
+2. Adjust the `VisionConfig` values for your camera mount, and make sure the
+   Limelight is configured under the hardware name `"limelight"`.
+3. Build and deploy TeamCode to the robot as usual.
+4. On the Driver Station, select **Autonomous → HiveVision Weaver Auto** (or the
+   loop variant), power on the Limelight, and press start.
+
+Telemetry reports the closest element class, field X/Y, and route status. If it
+says "No targets detected", check the Limelight pipeline index and that the game
+elements are in view.
+
+---
+
 ## Calibration
 
 Accurate distance estimation and field projection require proper physical measurement of your camera mounting geometry. Refer to [docs/calibration.md](docs/calibration.md) for step-by-step measurement procedures and coordinate system conventions.
@@ -127,7 +152,7 @@ Accurate distance estimation and field projection require proper physical measur
 - **[MODULES.md](docs/MODULES.md)** — Complete API and class reference for `:core` and `:weaver`.
 - **[calibration.md](docs/calibration.md)** — Procedure for measuring camera offsets, pitch angles, and understanding coordinate frames.
 - **[weaver/README.md](weaver/README.md)** — Quick guide to using the `WeaverRoute` extension.
-- **[docs/examples/](docs/examples/)** — Sample OpModes demonstrating integration with Pedro Pathing.
+- **[docs/examples/](docs/examples/)** — Sample OpModes (`AutoBallHuntOpMode`, `ManualBallChaseOpMode`) demonstrating integration with Pedro Pathing — see [Running the Examples](#running-the-examples).
 
 ---
 

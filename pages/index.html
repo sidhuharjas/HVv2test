@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HiveVision — docs</title>
+<style>
+  :root {
+    --bg: #fdfdfc;
+    --text: #1c1c1c;
+    --muted: #5f5f5f;
+    --border: #e4e4e0;
+    --code-bg: #f4f4f1;
+    --accent: #0b6b45;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 740px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .25rem; letter-spacing: -0.01em; }
+  .tagline { color: var(--muted); margin: 0 0 1.5rem; }
+  nav {
+    display: flex; flex-wrap: wrap; gap: .5rem 1.25rem;
+    padding: .75rem 0; margin-bottom: 2rem;
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    font-size: .95rem;
+  }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  h2 { font-size: 1.35rem; margin: 2.75rem 0 .5rem; padding-top: .5rem; }
+  h3 { font-size: 1.05rem; margin: 1.75rem 0 .35rem; }
+  p { margin: .5rem 0 1rem; }
+  a { color: var(--accent); }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .9rem 1.1rem;
+    overflow-x: auto;
+    font: 13.5px/1.55 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    margin: .5rem 0 1.1rem;
+  }
+  code { font: 13.5px/1.5 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+  p code, li code, td code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: .05rem .35rem;
+  }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0 1.25rem; font-size: .95rem; }
+  th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-weight: 600; }
+  ol, ul { margin: .25rem 0 1.1rem; padding-left: 1.4rem; }
+  li { margin: .3rem 0; }
+  .note {
+    border-left: 3px solid var(--accent);
+    background: #f2f7f4;
+    padding: .6rem 1rem;
+    margin: .75rem 0 1.25rem;
+    font-size: .95rem;
+  }
+  footer {
+    margin-top: 3.5rem; padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .9rem;
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>HiveVision</h1>
+  <p class="tagline">Point a Limelight 3A at the field, get game-element positions in field coordinates,
+  and route autonomous paths around obstacles. Built for FTC.</p>
+
+  <nav>
+    <a href="#install">Install</a>
+    <a href="#quickstart">Quickstart</a>
+    <a href="#calibration">Calibration</a>
+    <a href="#build">Build from source</a>
+    <a href="https://github.com/sidhuharjas/hvtest">GitHub</a>
+  </nav>
+
+  <h2 id="install">Install</h2>
+  <p>Add the repository and the modules you need to your <code>TeamCode/build.gradle</code>:</p>
+<pre>
+repositories {
+    maven { url = uri("https://sidhuharjas.github.io/hvtest") }
+}
+
+dependencies {
+    implementation "org.hivevisionftc:core:1.0.0"
+    // optional — auto-routing with Marrow Weaver
+    implementation "org.hivevisionftc:weaver:1.0.0"
+}
+</pre>
+  <p>Sync, and you're done. <code>core</code> is the perception pipeline; <code>weaver</code> is an
+  add-on that turns detections into obstacle-avoiding paths.</p>
+
+  <h2 id="quickstart">Quickstart</h2>
+
+  <h3>1. Set up the camera</h3>
+  <p>Measure your camera mount (see <a href="#calibration">Calibration</a>), then create the config:</p>
+<pre>
+VisionConfig config = new VisionConfig()
+        .camPitchDeg(25.0)      // tilt below horizontal, degrees
+        .camHeight(9.2)         // floor to lens center, inches
+        .ballHeight(3.0)        // floor to game element center, inches
+        .camXOffset(4.0)        // lens forward of robot center, inches
+        .camYOffset(0.0)        // lens left of robot center (+ left)
+        .minConfidence(0.44)    // ignore weak detections
+        .maxStalenessMs(120)    // discard stale data
+        .pipeline(3)            // Limelight pipeline index
+        .pollingRateHz(150);
+
+Limelight3A limelight = hardwareMap.get(Limelight3A.class, "limelight");
+HiveVision vision = new HiveVision(limelight, config);
+
+// only chase these classes
+vision.setAllowedClasses(BiobuzzClasses.NECTAR_RED, BiobuzzClasses.NECTAR_BLUE);
+</pre>
+
+  <h3>2. Ask for the closest target</h3>
+  <p>Pass your current pose so detections come back in field coordinates:</p>
+<pre>
+FieldPose robotPose = new FieldPose(
+        follower.getPose().getX(),
+        follower.getPose().getY(),
+        follower.getPose().getHeading());
+
+Detection target = vision.detections()
+        .fetch(robotPose)
+        .sortByDistance()
+        .getClosest();
+
+if (target != null) {
+    telemetry.addData("class", target.getBallClass());
+    telemetry.addData("field x", target.getX());
+    telemetry.addData("field y", target.getY());
+}
+</pre>
+
+  <h3>3. Route a path through the detections</h3>
+  <p>The optional <code>weaver</code> module turns the same list into a Marrow path that dodges
+  obstacles. Feed it to Pedro Pathing and drive:</p>
+<pre>
+PathResult path = vision.detections()
+        .fetch(robotPose)
+        .sortByDistance()
+        .with(WeaverRoute.fromFetchPose()
+                .avoid(new CircleZone(new Point(72, 72), 18.0))
+                .maxTargets(4));
+
+if (path != null) {
+    follower.follow(PedroPathingConverter.toPath(path));
+}
+</pre>
+  <p><code>avoid(...)</code> zones are optional. <code>with(...)</code> returns <code>null</code>
+  when nothing was detected — always null-check.</p>
+
+  <h2 id="calibration">Calibration</h2>
+  <p>Distance estimation comes from your camera geometry. Measure these once, write them down,
+  and positions on the field will line up:</p>
+  <table>
+    <tr><th>Method</th><th>What to measure</th></tr>
+    <tr><td><code>camHeight</code></td><td>Floor to lens center (inches)</td></tr>
+    <tr><td><code>ballHeight</code></td><td>Floor to game element center (inches)</td></tr>
+    <tr><td><code>camPitchDeg</code></td><td>Tilt below horizontal (degrees)</td></tr>
+    <tr><td><code>camXOffset</code></td><td>Lens forward of robot center (+ forward)</td></tr>
+    <tr><td><code>camYOffset</code></td><td>Lens left of robot center (+ left, − right)</td></tr>
+    <tr><td><code>minConfidence</code></td><td>Lowest confidence you trust (0.0–1.0)</td></tr>
+    <tr><td><code>maxStalenessMs</code></td><td>How old a detection may be (ms)</td></tr>
+  </table>
+  <div class="note">
+    If your robot is in CAD, pull the four geometry values from the assembly — it beats a tape
+    measure. Then double-check on the real robot for tile compression and mount flex.
+  </div>
+  <p>Full measurement procedure and coordinate frames:
+  <a href="https://github.com/sidhuharjas/hvtest/blob/main/docs/calibration.md">docs/calibration.md</a>.
+  API reference: <a href="https://github.com/sidhuharjas/hvtest/blob/main/docs/MODULES.md">docs/MODULES.md</a>.
+  Example OpModes: <a href="https://github.com/sidhuharjas/hvtest/tree/main/docs/examples">docs/examples/</a>.</p>
+
+  <h2 id="build">Build from source</h2>
+  <p>Clone <a href="https://github.com/sidhuharjas/hvtest">sidhuharjas/hvtest</a>, then:</p>
+<pre>
+./gradlew test           # unit tests, no camera needed
+./gradlew spotlessApply  # format
+./gradlew assembleRelease
+</pre>
+  <p>Every push of a <code>v*</code> tag (or a manual run of the
+  <a href="https://github.com/sidhuharjas/hvtest/actions">Publish to Pages Maven repo</a> workflow)
+  rebuilds the AARs and republishes them to this site. Bump <code>version</code> in
+  <code>build.gradle.kts</code> before tagging.</p>
+
+  <footer>
+    MIT license. HiveVision is not affiliated with FIRST.
+    Works with <a href="https://github.com/pedropathing/core">Pedro Pathing</a> and
+    <a href="https://marrow.skeletonarmyftc.com/">Marrow Weaver</a>.
+  </footer>
+
+</main>
+</body>
+</html>

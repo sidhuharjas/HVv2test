@@ -43,32 +43,8 @@ jobs:
         run: |
           mkdir -p site
           cp -r "$HOME/.m2/repository/org" site/org
+          cp -r pages/. site/
           find site -name "*.jar" -size 0 -delete
-          cat > site/index.html <<'EOF'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head><meta charset="utf-8"><title>HiveVision Maven Repository</title></head>
-          <body style="font-family: monospace; margin: 2em;">
-            <h1>HiveVision Maven Repository</h1>
-            <p>This is a static Maven repository hosted on GitHub Pages.</p>
-            <p>Add to your build:</p>
-            <pre>
-          repositories {
-              maven { url = uri("https://sidhuharjas.github.io/hvtest") }
-          }
-          dependencies {
-              implementation("org.hivevisionftc:core:1.0.0")
-              implementation("org.hivevisionftc:weaver:1.0.0")
-          }
-            </pre>
-            <p>Artifacts:</p>
-            <ul>
-              <li><a href="org/hivevisionftc/core/1.0.0/core-1.0.0.aar">org.hivevisionftc:core:1.0.0</a></li>
-              <li><a href="org/hivevisionftc/weaver/1.0.0/weaver-1.0.0.aar">org.hivevisionftc:weaver:1.0.0</a></li>
-            </ul>
-          </body>
-          </html>
-          EOF
           ls -R site | head -100
 
       - name: Push to gh-pages

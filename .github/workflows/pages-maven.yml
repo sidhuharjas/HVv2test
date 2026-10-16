@@ -1,0 +1,46 @@
+name: Publish to Pages Maven repo
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Ensure Android SDK platform 35
+        run: yes | sdkmanager "platforms;android-35" || true
+
+      - name: Publish to Maven Local
+        env:
+          SIGNING_KEY: dummy
+          SIGNING_PASSWORD: dummy
+          CENTRAL_PORTAL_USER: dummy
+          CENTRAL_PORTAL_PASSWORD: dummy
+        run: ./gradlew deployLocal --no-daemon --stacktrace
+
+      - name: Assemble Pages site
+        run: |
+          mkdir -p site
+          cp -r "$HOME/.m2/repository/org" site/org
+          find site -name "*.jar" -size 0 -delete
+          ls -R site | head -100
+
+      - name: Push to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
+          commit_message: "publish maven repo artifacts"

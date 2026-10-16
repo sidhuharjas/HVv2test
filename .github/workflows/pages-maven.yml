@@ -24,7 +24,7 @@ jobs:
 
       - name: Generate throwaway PGP key for CI signing
         run: |
-          gpg --batch --passphrase 'ci' --pinentry-mode loopback --quick-generate-key "hvtest-pages-ci <ci@hvtest.local>" default default never
+          gpg --batch --passphrase '' --quick-generate-key "hvtest-pages-ci <ci@hvtest.local>" default default never
           KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')
           {
             echo "SIGNING_KEY<<PGPEOF"

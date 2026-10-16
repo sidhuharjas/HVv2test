@@ -4,6 +4,8 @@ Camera-based detection, target filtering, field positioning, and Weaver path rou
 
 `HiveVision` turns Limelight 3A neural network detections into absolute field coordinates and generates optimal path routes for autonomous navigation. It is built natively for FTC game elements (such as `POLLEN`, `NECTAR_RED`, `NECTAR_BLUE`) using Limelight 3A SSD detectors and integrates seamlessly with [Pedro Pathing](https://github.com/pedropathing/core) and [Marrow Weaver](https://marrow.skeletonarmyftc.com/).
 
+**Docs & Maven repository:** [sidhuharjas.github.io/hvtest](https://sidhuharjas.github.io/hvtest)
+
 ---
 
 ## Modules
@@ -19,9 +21,15 @@ Camera-based detection, target filtering, field positioning, and Weaver path rou
 
 ## Installation
 
-Add the required dependencies to your `TeamCode/build.gradle`:
+Artifacts are hosted on GitHub Pages — no Maven Central account or extra mirrors needed.
+
+Add the repository and dependencies to your `TeamCode/build.gradle`:
 
 ```gradle
+repositories {
+    maven { url = uri("https://sidhuharjas.github.io/hvtest") }
+}
+
 dependencies {
     // Core vision module
     implementation 'org.hivevisionftc:core:1.0.0'
@@ -31,7 +39,7 @@ dependencies {
 }
 ```
 
-The artifacts publish to Maven Central. Ensure `mavenCentral()` is included in your `repositories` block.
+Step-by-step setup, calibration, and usage: [sidhuharjas.github.io/hvtest](https://sidhuharjas.github.io/hvtest)
 
 ---
 
@@ -115,6 +123,7 @@ Accurate distance estimation and field projection require proper physical measur
 
 ## Documentation & Examples
 
+- **[sidhuharjas.github.io/hvtest](https://sidhuharjas.github.io/hvtest)** — Setup guide, quickstart, and calibration summary.
 - **[MODULES.md](docs/MODULES.md)** — Complete API and class reference for `:core` and `:weaver`.
 - **[calibration.md](docs/calibration.md)** — Procedure for measuring camera offsets, pitch angles, and understanding coordinate frames.
 - **[weaver/README.md](weaver/README.md)** — Quick guide to using the `WeaverRoute` extension.
@@ -140,9 +149,21 @@ Accurate distance estimation and field projection require proper physical measur
 
 ---
 
-## Publishing to Maven Central
+## Publishing
 
-Publishing uses the Deployer plugin configured in `build.gradle.kts`.
+Releases are published to the GitHub Pages Maven repository at
+[sidhuharjas.github.io/hvtest](https://sidhuharjas.github.io/hvtest) by the
+[`Publish to Pages Maven repo`](.github/workflows/pages-maven.yml) workflow.
+It builds the AARs, pushes them to the `gh-pages` branch, and the docs site
+along with them.
+
+To cut a release:
+
+1. Bump `version` in `build.gradle.kts`.
+2. Push a `v*` tag (`git tag v1.1.0 && git push --tags`), or run the workflow
+   manually from the Actions tab.
+
+Local testing uses the Deployer plugin configured in `build.gradle.kts`:
 
 | Gradle Task | Description |
 |-------------|-------------|

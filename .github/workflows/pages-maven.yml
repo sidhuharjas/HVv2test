@@ -12,9 +12,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -22,10 +22,19 @@ jobs:
       - name: Ensure Android SDK platform 35
         run: yes | sdkmanager "platforms;android-35" || true
 
+      - name: Generate throwaway PGP key for CI signing
+        run: |
+          gpg --batch --passphrase '' --quick-generate-key "hvtest-pages-ci <ci@hvtest.local>" default default never
+          KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')
+          {
+            echo "SIGNING_KEY<<PGPEOF"
+            gpg --export-secret-keys --armor "$KEY_ID"
+            echo "PGPEOF"
+            echo "SIGNING_PASSWORD="
+          } >> "$GITHUB_ENV"
+
       - name: Publish to Maven Local
         env:
-          SIGNING_KEY: dummy
-          SIGNING_PASSWORD: dummy
           CENTRAL_PORTAL_USER: dummy
           CENTRAL_PORTAL_PASSWORD: dummy
         run: ./gradlew deployLocal --no-daemon --stacktrace

@@ -80,6 +80,7 @@
   <nav>
     <a href="#install">Install</a>
     <a href="#quickstart">Quickstart</a>
+    <a href="#examples">Examples</a>
     <a href="#calibration">Calibration</a>
     <a href="#build">Build from source</a>
     <a href="https://github.com/sidhuharjas/hvtest">GitHub</a>
@@ -161,6 +162,34 @@ if (path != null) {
 </pre>
   <p><code>avoid(...)</code> zones are optional. <code>with(...)</code> returns <code>null</code>
   when nothing was detected — always null-check.</p>
+
+  <h2 id="examples">Run the examples</h2>
+  <p>Two finished OpModes ship in
+  <a href="https://github.com/sidhuharjas/hvtest/tree/main/docs/examples">docs/examples/</a>:</p>
+  <table>
+    <tr><th>OpMode</th><th>What it does</th></tr>
+    <tr>
+      <td><code>AutoBallHuntOpMode</code><br><span style="color:var(--muted)">&ldquo;HiveVision Weaver Auto&rdquo;</span></td>
+      <td>One-shot autonomous. Detects targets, builds a Weaver route through the closest 2, drives it.</td>
+    </tr>
+    <tr>
+      <td><code>ManualBallChaseOpMode</code><br><span style="color:var(--muted)">&ldquo;HiveVision Loop with Obstacles&rdquo;</span></td>
+      <td>Runs a detection loop the whole match. Re-plans around an obstacle whenever the robot is idle.</td>
+    </tr>
+  </table>
+  <ol>
+    <li>Copy those two files plus <code>SampleFollowerFactory.java</code> into your TeamCode module
+        (they already declare <code>package org.firstinspires.ftc.teamcode</code>).</li>
+    <li>Fix the <code>VisionConfig</code> numbers for your camera mount. The config file expects the
+        Limelight under the hardware name <code>"limelight"</code> — rename it in your
+        <code>hardwareMap</code> / config if yours differs.</li>
+    <li>Build and deploy TeamCode to the robot the way you normally ship code.</li>
+    <li>On the Driver Station pick <b>Autonomous → HiveVision Weaver Auto</b> (or the loop one),
+        turn on the Limelight, press start.</li>
+  </ol>
+  <p>Telemetry shows what it sees: closest element class, field X/Y, and route status. If it says
+  &ldquo;No targets detected&rdquo;, check the Limelight pipeline index and that the game elements are
+  inside the camera view.</p>
 
   <h2 id="calibration">Calibration</h2>
   <p>Distance estimation comes from your camera geometry. Measure these once, write them down,

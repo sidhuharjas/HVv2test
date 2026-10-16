@@ -24,13 +24,13 @@ jobs:
 
       - name: Generate throwaway PGP key for CI signing
         run: |
-          gpg --batch --passphrase '' --quick-generate-key "hvtest-pages-ci <ci@hvtest.local>" default default never
+          gpg --batch --passphrase 'ci' --pinentry-mode loopback --quick-generate-key "hvtest-pages-ci <ci@hvtest.local>" default default never
           KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec/{print $5; exit}')
           {
             echo "SIGNING_KEY<<PGPEOF"
             gpg --export-secret-keys --armor "$KEY_ID"
             echo "PGPEOF"
-            echo "SIGNING_PASSWORD="
+            echo "SIGNING_PASSWORD=ci"
           } >> "$GITHUB_ENV"
 
       - name: Publish to Maven Local

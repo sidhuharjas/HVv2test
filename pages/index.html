@@ -215,9 +215,15 @@ VisionConfig config = new VisionConfig()
 Limelight3A limelight = hardwareMap.get(Limelight3A.class, "limelight");
 HiveVision vision = new HiveVision(limelight, config);
 
-// only chase these classes
-vision.setAllowedClasses(BiobuzzClasses.NECTAR_RED, BiobuzzClasses.NECTAR_BLUE);
+// optional: restrict which classes to chase (default = all three)
+vision.setAllowedClasses(
+        BiobuzzClasses.POLLEN,          // neutral yellow pollen
+        BiobuzzClasses.NECTAR_RED,      // alliance red nectar
+        BiobuzzClasses.NECTAR_BLUE);    // alliance blue nectar
 </pre>
+  <p>Class IDs match the model labels: <code>POLLEN&nbsp;=&nbsp;0</code>, <code>NECTAR_RED&nbsp;=&nbsp;1</code>,
+  <code>NECTAR_BLUE&nbsp;=&nbsp;2</code>. Skip <code>setAllowedClasses</code> entirely to keep all three
+  enabled, or pass only the classes you want (e.g. <code>NECTAR_RED, NECTAR_BLUE</code> to ignore pollen).</p>
 
   <h3>2. Ask for the closest target</h3>
   <p>Pass your current pose so detections come back in field coordinates:</p>

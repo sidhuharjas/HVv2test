@@ -64,8 +64,11 @@ VisionConfig config = new VisionConfig()
 Limelight3A limelight = hardwareMap.get(Limelight3A.class, "limelight");
 HiveVision vision = new HiveVision(limelight, config);
 
-// Optionally restrict allowed detection classes
-vision.setAllowedClasses(BiobuzzClasses.NECTAR_RED, BiobuzzClasses.NECTAR_BLUE);
+// Optional: restrict which classes to chase (default = all three)
+vision.setAllowedClasses(
+        BiobuzzClasses.POLLEN,          // neutral yellow pollen
+        BiobuzzClasses.NECTAR_RED,      // alliance red nectar
+        BiobuzzClasses.NECTAR_BLUE);    // alliance blue nectar
 ```
 
 ### 2. Fetch and Query Detections

@@ -10,6 +10,8 @@ implementation 'org.hivevisionftc:weaver:1.0.0'   // pulls in :core and Marrow
 
 Example usage:
 ```java
+import com.skeletonarmy.marrow.weaver.PedroPathingConverter; // ships with Marrow core
+
 PathResult path = vision.detections()
         .fetch(follower.getPose().getX(), follower.getPose().getY())
         .with(WeaverRoute.fromFetchPose()

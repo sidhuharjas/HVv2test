@@ -229,9 +229,9 @@ vision.setAllowedClasses(
   <p>Pass your current pose so detections come back in field coordinates:</p>
 <pre>
 FieldPose robotPose = new FieldPose(
-        follower.getPose().getX(),
-        follower.getPose().getY(),
-        follower.getPose().getHeading());
+        follower.pose().x(),
+        follower.pose().y(),
+        follower.pose().heading());
 
 Detection target = vision.detections()
         .fetch(robotPose)

@@ -75,7 +75,7 @@ vision.setAllowedClasses(
 
 ```java
 // Fetch detections and project them to field coordinates given robot's current pose
-FieldPose robotPose = new FieldPose(follower.getPose().getX(), follower.getPose().getY(), follower.getPose().getHeading());
+FieldPose robotPose = new FieldPose(follower.pose().x(), follower.pose().y(), follower.pose().heading());
 
 // Query the closest detected element
 Detection target = vision.detections()

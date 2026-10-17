@@ -13,7 +13,7 @@ Example usage:
 import com.skeletonarmy.marrow.weaver.PedroPathingConverter; // ships with Marrow core
 
 PathResult path = vision.detections()
-        .fetch(follower.getPose().getX(), follower.getPose().getY())
+        .fetch(follower.pose().x(), follower.pose().y())
         .with(WeaverRoute.fromFetchPose()
                 .avoid(new CircleZone(new Point(72, 72), 18))   // optional obstacles
                 .maxTargets(4));                                 // optional cap

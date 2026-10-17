@@ -47,9 +47,9 @@ public class ManualBallChaseOpMode extends LinearOpMode {
             follower.update();
 
             FieldPose currentPose = new FieldPose(
-                    follower.getPose().getX(),
-                    follower.getPose().getY(),
-                    follower.getPose().getHeading());
+                    follower.pose().x(),
+                    follower.pose().y(),
+                    follower.pose().heading());
 
             // Fetch detections and build path avoiding an obstacle zone
             HiveVision.DetectionList list = vision.detections().fetch(currentPose);

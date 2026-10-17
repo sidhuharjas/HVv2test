@@ -43,10 +43,10 @@ public class AutoBallHuntOpMode extends LinearOpMode {
 
         if (opModeIsActive()) {
             // Obtain current robot pose
-            FieldPose robotPose = new FieldPose(
-                    follower.getPose().getX(),
-                    follower.getPose().getY(),
-                    follower.getPose().getHeading());
+        FieldPose robotPose = new FieldPose(
+                follower.pose().x(),
+                follower.pose().y(),
+                follower.pose().heading());
 
             // Fetch detections and generate a Weaver path route
             PathResult pathResult = vision.detections()

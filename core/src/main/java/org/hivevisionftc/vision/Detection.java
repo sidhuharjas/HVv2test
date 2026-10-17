@@ -10,8 +10,7 @@ public class Detection {
         this(classId, null, txDeg, tyDeg, confidence, area);
     }
 
-    public Detection(
-            int classId, String className, double txDeg, double tyDeg, double confidence, double area) {
+    public Detection(int classId, String className, double txDeg, double tyDeg, double confidence, double area) {
         this.ballClass = BiobuzzClasses.fromId(classId);
         this.classId = classId;
         this.className = className;

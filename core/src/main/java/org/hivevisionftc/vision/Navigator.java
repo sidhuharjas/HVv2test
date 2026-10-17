@@ -66,9 +66,8 @@ public class Navigator {
     /** Reads the camera once and projects every accepted detection onto the field. */
     public Navigator updateVision() {
         if (poseSource == null) {
-            throw new IllegalStateException(
-                    "No pose source: call setPoseSource(...) once at init, "
-                            + "or updateVision(pose) with a pose you already have");
+            throw new IllegalStateException("No pose source: call setPoseSource(...) once at init, "
+                    + "or updateVision(pose) with a pose you already have");
         }
         return updateVision(poseSource.get());
     }
@@ -92,8 +91,7 @@ public class Navigator {
         Detection best = null;
         double bestDistance = Double.MAX_VALUE;
         for (Detection detection : latest.getDetections()) {
-            double distance = Math.hypot(
-                    detection.getX() - robot.getX(), detection.getY() - robot.getY());
+            double distance = Math.hypot(detection.getX() - robot.getX(), detection.getY() - robot.getY());
             if (distance < bestDistance) {
                 bestDistance = distance;
                 best = detection;

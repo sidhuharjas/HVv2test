@@ -60,7 +60,8 @@ class ProjectionTest {
     void aTargetStraightAheadLandsOnTheFieldAxis() {
         HiveVision vision = visionSeeing(seeing(0, tyFor(20)));
 
-        List<Detection> found = vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections();
+        List<Detection> found =
+                vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections();
 
         assertEquals(1, found.size());
         // 20" of ground from the camera plus the 4" camera mount offset ahead of the robot center.
@@ -73,10 +74,12 @@ class ProjectionTest {
         // Field y is positive left, so a target right of the camera (tx positive) must come out negative.
         HiveVision vision = visionSeeing(seeing(30, tyFor(20)));
 
-        List<Detection> found = vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections();
+        List<Detection> found =
+                vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections();
 
         assertEquals(1, found.size());
-        assertEquals(20 * Math.cos(Math.toRadians(30)) + CAM_X_OFFSET, found.get(0).getX(), 1e-6);
+        assertEquals(
+                20 * Math.cos(Math.toRadians(30)) + CAM_X_OFFSET, found.get(0).getX(), 1e-6);
         assertEquals(-20 * Math.sin(Math.toRadians(30)), found.get(0).getY(), 1e-6);
     }
 
@@ -97,10 +100,15 @@ class ProjectionTest {
     void aTargetOnOrAboveTheHorizonIsDropped() {
         // ty at or above the pitch means the ray never meets the ball's plane.
         HiveVision above = visionSeeing(seeing(0, PITCH + 15));
-        assertTrue(above.detections().fetch(new FieldPose(0, 0, 0)).getDetections().isEmpty());
+        assertTrue(
+                above.detections().fetch(new FieldPose(0, 0, 0)).getDetections().isEmpty());
 
         HiveVision atHorizon = visionSeeing(seeing(0, PITCH));
-        assertTrue(atHorizon.detections().fetch(new FieldPose(0, 0, 0)).getDetections().isEmpty());
+        assertTrue(atHorizon
+                .detections()
+                .fetch(new FieldPose(0, 0, 0))
+                .getDetections()
+                .isEmpty());
     }
 
     @Test
@@ -110,7 +118,8 @@ class ProjectionTest {
                 new Detection(2, "blue_nectar", 0, tyFor(30), 0.9, 0.1));
         vision.track("blue_nectar");
 
-        List<Detection> found = vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections();
+        List<Detection> found =
+                vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections();
 
         assertEquals(1, found.size());
         assertEquals("blue_nectar", found.get(0).getClassName());
@@ -119,11 +128,11 @@ class ProjectionTest {
     @Test
     void trackFallsBackToModelLabelsWhenTheDetectorReportsNoName() {
         HiveVision vision = visionSeeing(
-                new Detection(0, null, 0, tyFor(20), 0.9, 0.1),
-                new Detection(1, null, 0, tyFor(30), 0.9, 0.1));
+                new Detection(0, null, 0, tyFor(20), 0.9, 0.1), new Detection(1, null, 0, tyFor(30), 0.9, 0.1));
         vision.modelLabels("yellow_pollen", "red_nectar", "blue_nectar").track("red_nectar");
 
-        List<Detection> found = vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections();
+        List<Detection> found =
+                vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections();
 
         assertEquals(1, found.size());
         assertEquals(1, found.get(0).getClassId());
@@ -168,7 +177,10 @@ class ProjectionTest {
             }
         };
         HiveVision vision = new HiveVision(source, config());
-        assertTrue(vision.detections().fetch(new FieldPose(0, 0, 0)).getDetections().isEmpty());
+        assertTrue(vision.detections()
+                .fetch(new FieldPose(0, 0, 0))
+                .getDetections()
+                .isEmpty());
 
         raw.clear();
         raw.add(new Detection(1, "blue_nectar", 0, tyFor(20), 0.9, 0.1));

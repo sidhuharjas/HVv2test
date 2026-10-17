@@ -33,6 +33,7 @@ public class LimelightSource implements DetectionSource {
         for (LLResultTypes.DetectorResult detection : detections) {
             out.add(new Detection(
                     detection.getClassId(),
+                    detection.getClassName(),
                     detection.getTargetXDegrees(),
                     detection.getTargetYDegrees(),
                     detection.getConfidence(),

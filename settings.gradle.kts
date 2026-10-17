@@ -16,5 +16,4 @@ plugins {
 rootProject.name = "HiveVision"
 
 
-include(":core")  // Base core module, required for all other modules
-include(":weaver")  // Optional: Marrow Weaver path generation for DetectionList
+include(":core")  // The one artifact: vision core + Marrow Weaver route planning

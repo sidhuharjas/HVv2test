@@ -1,22 +1,97 @@
 # Module Reference — HiveVision
 
-This document provides a comprehensive API and architecture reference for the `HiveVision` library.
+This document provides an API and architecture reference for the `HiveVision` library.
 
 ---
 
 ## Overview
 
-`HiveVision` is architected as a modular library:
-- **`:core` (`org.hivevisionftc.vision`)**: Perception pipeline, Limelight 3A abstraction, configuration, detection filtering, sorting, and 3D camera-to-field projection.
-- **`:weaver` (`org.hivevisionftc.vision.weaver`)**: Extension module that integrates with [Marrow Weaver](https://marrow.skeletonarmyftc.com/) to plan bezier path routes through field detections.
+Since 2.0.0 `HiveVision` ships as a single artifact with two layers:
+
+- **`org.hivevisionftc.vision`**: The `Navigator` (the entry point most OpModes use), plus the perception pipeline beneath it — Limelight 3A abstraction, configuration, detection filtering, sorting, and camera-to-field projection.
+- **`org.hivevisionftc.vision.weaver`**: [Marrow Weaver](https://marrow.skeletonarmyftc.com/) route planning (`WeaverRoute`), folded into `core` — `Navigator.returnPath()` wraps it.
 
 ---
 
-## Core Module (`org.hivevisionftc.vision`)
+## Navigator (`org.hivevisionftc.vision.Navigator`)
+
+The one object an OpMode talks to.
+
+#### Constructors
+```java
+public Navigator(HardwareMap hardwareMap, VisionConfig config);  // opens the camera itself
+public Navigator(Limelight3A limelight, VisionConfig config);
+public Navigator(HiveVision vision, VisionConfig config);        // custom source / shared session
+```
+
+The `HardwareMap` overload looks the camera up under `config.getHardwareName()` (default `"limelight"`).
+
+#### Pose wiring (once, at init)
+| Method | Description |
+|--------|-------------|
+| `Navigator setPoseSource(Supplier<FieldPose> source)` | Supplies the robot's field pose for no-arg `updateVision()`. |
+
+#### Basic tier (call every loop)
+| Method | Description |
+|--------|-------------|
+| `Navigator updateVision()` | Reads the camera and projects detections using the pose source. |
+| `Navigator updateVision(FieldPose pose)` | Same, with a pose you already hold (overloads for x/y/heading). |
+| `Detection closest()` | Nearest detection to the robot, or `null`. Always distance-ordered. |
+| `List<Detection> objects()` | All accepted detections in the configured `Sort` order (empty if none). |
+| `boolean didDetect()` | Whether the last update saw anything. |
+| `PathResult returnPath()` | Plans a Marrow route from the update pose; `null` when there is nothing to route to. |
+
+#### Advanced tier (fluent, applied by the next `returnPath()`)
+| Method | Description |
+|--------|-------------|
+| `Navigator track(String... labels)` | Chase only these model labels (case-insensitive); no args = everything. |
+| `Navigator modelLabels(String... labels)` | Full labels.txt in class-id order; fallback when the detector reports no name. |
+| `Navigator maxObjects(int n)` | Visit at most `n` detections (`0` or less = all). |
+| `Navigator clearance(double inches)` | Marrow clearance from obstacles (omit to keep Marrow's value). |
+| `Navigator sort(Sort sort)` | Ordering for routing/listing — see `Sort`. |
+| `Navigator avoid(Zone... zones)` | Add obstacle zones (persist across loops). |
+| `Navigator clearZones()` | Remove all zones. |
+
+#### Underlying API
+| Method | Description |
+|--------|-------------|
+| `HiveVision vision()` | The underlying session (`setAllowedClasses`, `track`, raw results). |
+| `HiveVision.DetectionList detections()` | The list from the last update (`clampYDetections`, `getBiggest`, `with(...)`). |
+| `VisionConfig getConfig()` | The configuration this navigator was built with. |
+
+#### Basic loop
+```java
+Navigator navigator = Constants.createNewNavigator(hardwareMap);
+navigator.setPoseSource(() -> new FieldPose(follower.pose().x(), follower.pose().y(), follower.pose().heading()));
+
+while (opModeIsActive()) {
+    follower.update();
+    navigator.updateVision();
+    if (navigator.didDetect()) {
+        PathResult route = navigator.returnPath();
+        if (route != null && !follower.isBusy()) follower.follow(PedroPathingConverter.toPath(route));
+    }
+}
+```
+
+---
+
+### `Sort`
+
+Order used by `Navigator.sort(...)` (class ids, not season-specific names):
+
+- **`SHORTEST`** — nearest first (default).
+- **`LONGEST`** — farthest first.
+- **`SIZE`** — largest in the image first.
+- **`CONFIDENCE`** — highest detector confidence first.
+- **`COLOR`** — grouped by class id ascending.
+- **`NONE`** — camera order.
+
+---
 
 ### `HiveVision`
 
-The main entry point for managing vision pipeline sessions. It ties together a camera hardware source (`DetectionSource`), configuration parameters (`VisionConfig`), and allowed detection classes.
+The session beneath `Navigator`, reachable through `navigator.vision()`.
 
 #### Constructors
 ```java
@@ -28,7 +103,9 @@ public HiveVision(Limelight3A limelight, VisionConfig config);
 
 | Method                                                    | Description                                                                                 |
 |-----------------------------------------------------------|---------------------------------------------------------------------------------------------|
-| `HiveVision setAllowedClasses(BiobuzzClasses... classes)` | Sets the list of allowed target classes to filter for (overwrites current allowed classes). |
+| `HiveVision track(String... labels)`                      | Chase only these model labels (case-insensitive); no args = everything.                     |
+| `HiveVision modelLabels(String... labels)`                | Full labels.txt in class-id order; fallback when detections carry no class name.            |
+| `HiveVision setAllowedClasses(BiobuzzClasses... classes)` | Legacy enum filter (overwrites current allowed classes). ANDs with `track(...)`.             |
 | `HiveVision addAllowedClass(BiobuzzClasses clazz)`        | Adds a specific class to the allowed class set.                                             |
 | `boolean isAllowed(BiobuzzClasses clazz)`                 | Checks if a class is currently allowed.                                                     |
 | `Set<BiobuzzClasses> getAllowed()`                        | Returns the active set of allowed classes.                                                  |
@@ -47,11 +124,13 @@ A fluent builder and query container for fetching, filtering, sorting, and trans
 public DetectionList fetch(double robotX, double robotY);
 public DetectionList fetch(FieldPose robotPose);
 ```
-Queries the `DetectionSource` for the latest detections, filters them by allowed classes, minimum confidence threshold (`minConfidence`), and data staleness (`maxStalenessMs`), then projects camera-relative angles (`tx`, `ty`) into field coordinates (`x`, `y` in inches) based on camera mount geometry and the given robot pose.
+Queries the `DetectionSource` for the latest detections, filters them by allowed classes, tracked labels (`track(...)`), minimum confidence threshold (`minConfidence`), and data staleness (`maxStalenessMs`), then projects camera-relative angles (`tx`, `ty`) into field coordinates (`x`, `y` in inches) based on camera mount geometry and the given robot pose. Detections whose ray never meets the element's plane (at or above the horizon) are dropped.
+
+Coordinate conventions: `tx` positive right, `ty` positive up, field `y` positive left, heading counterclockwise.
 
 #### Sorting Methods
-- **`sortByDistance()`**: Sorts detections by straight-line distance from the robot pose (closest first).
-- **`sortByColor()`**: Sorts detections by class ID ordinal ascending (`POLLEN`, `NECTAR_RED`, `NECTAR_BLUE`, `UNKNOWN`).
+- **`sortByDistance()` / `sortByDistance(boolean closestFirst)`**: Sorts by straight-line distance from the robot pose (closest first, or farthest first with `false`).
+- **`sortByColor()`**: Sorts detections by class ID ordinal ascending.
 - **`sortBySize()`**: Sorts detections by target area descending (largest first).
 - **`sortByConfidence()`**: Sorts detections by confidence score descending.
 
@@ -70,7 +149,7 @@ Queries the `DetectionSource` for the latest detections, filters them by allowed
 ```java
 public <R> R with(Function<? super DetectionList, ? extends R> fn);
 ```
-Passes this `DetectionList` instance into the provided function and returns its result. This allows optional external modules (such as `:weaver`) to operate on detection lists without creating direct dependencies in `:core`.
+Passes this `DetectionList` instance into the provided function and returns its result — the hook `WeaverRoute` plugs into.
 
 Example:
 ```java
@@ -84,10 +163,11 @@ PathResult path = vision.detections()
 
 ### `VisionConfig`
 
-A fluent builder class that holds camera mounting geometry parameters, detection threshold filters, and hardware polling options.
+A fluent builder class that holds the hardware device name, camera mounting geometry parameters, detection threshold filters, and hardware polling options.
 
 ```java
 VisionConfig config = new VisionConfig()
+        .hardwareName("limelight")   // Device name in the robot configuration
         .camPitchDeg(25.0)      // Downward tilt angle below horizontal (degrees)
         .camHeight(9.2)         // Lens height above floor (inches)
         .ballHeight(3.0)        // Game element center height above floor (inches)
@@ -107,11 +187,13 @@ VisionConfig config = new VisionConfig()
 Represents a single detected target. Before `fetch(...)`, `x` and `y` represent raw camera angles (`tx`, `ty` in degrees). After `fetch(...)`, `x` and `y` represent projected field coordinates in inches.
 
 #### Getters
-- `BiobuzzClasses getBallClass()`: Target classification.
+- `int getClassId()`: Model class id (index into labels.txt).
+- `String getClassName()`: Model label (e.g. `"red_nectar"`), or `null` if the detector reports none.
+- `BiobuzzClasses getBallClass()`: Legacy enum view of the class id.
 - `double getX()`: Target X position (`tx` degrees or field X inches).
 - `double getY()`: Target Y position (`ty` degrees or field Y inches).
-- `double getConfidence()`: Detection confidence score.
-- `double getArea()`: Detection bounding box area.
+- `double getConfidence()`: Detection confidence score (0.0 to 1.0).
+- `double getArea()`: Detection bounding box area (share of the image, 0.0 to 1.0).
 
 ---
 
@@ -132,7 +214,7 @@ public FieldPose(double x, double y); // heading defaults to 0.0
 
 ### `BiobuzzClasses`
 
-Enum representing game element classifications:
+Legacy enum view of model class ids (new code should use `track(...)` label names instead):
 - `POLLEN(0)` — Neutral yellow pollen element
 - `NECTAR_RED(1)` — Alliance red nectar element
 - `NECTAR_BLUE(2)` — Alliance blue nectar element
@@ -152,15 +234,15 @@ public interface DetectionSource {
 }
 ```
 
-`LimelightSource` implements `DetectionSource` for the FTC `Limelight3A` camera, managing pipeline switches, polling rate, and mapping `LLResult` detector outputs into `Detection` instances.
+`LimelightSource` implements `DetectionSource` for the FTC `Limelight3A` camera, managing pipeline switches, polling rate, and mapping `LLResult` detector outputs (including class names) into `Detection` instances.
 
 ---
 
-## Weaver Module (`org.hivevisionftc.vision.weaver`)
+## Route Planning (`org.hivevisionftc.vision.weaver`)
 
 ### `WeaverRoute`
 
-Implements `Function<HiveVision.DetectionList, PathResult>`. It uses [Marrow Weaver](https://marrow.skeletonarmyftc.com/) to build cubic bezier routes passing through field-frame detections.
+Implements `Function<HiveVision.DetectionList, PathResult>`. It uses [Marrow Weaver](https://marrow.skeletonarmyftc.com/) to build cubic bezier routes passing through field-frame detections. `Navigator.returnPath()` wraps it.
 
 #### Factory Methods
 - **`WeaverRoute.from(FieldPose start)`**: Specifies an explicit starting pose for the path route.

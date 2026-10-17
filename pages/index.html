@@ -181,97 +181,90 @@
   and route autonomous paths around obstacles. Built for FTC.</p>
 
   <h2 id="install">Install</h2>
-  <p>Add the repository and the modules you need to your <code>TeamCode/build.gradle</code>:</p>
+  <p>Add the repository and the one dependency to your <code>TeamCode/build.gradle</code>:</p>
 <pre>
 repositories {
     maven { url = uri("https://sidhuharjas.github.io/hvtest") }
 }
 
 dependencies {
-    implementation "org.hivevisionftc:core:1.0.0"
-    // optional — auto-routing with Marrow Weaver
-    implementation "org.hivevisionftc:weaver:1.0.0"
+    implementation "org.hivevisionftc:core:2.0.0"
 }
 </pre>
-  <p>Sync, and you're done. <code>core</code> is the perception pipeline; <code>weaver</code> is an
-  add-on that turns detections into obstacle-avoiding paths.</p>
+  <p>Sync, and you're done. One artifact carries everything: perception, field projection, and
+  obstacle-avoiding route planning.</p>
+  <div class="note">
+    <b>Upgrading from 1.x:</b> delete your <code>org.hivevisionftc:weaver</code> line — route
+    planning now lives inside <code>core</code>. Keeping both on the classpath causes duplicate
+    classes.
+  </div>
 
   <h2 id="quickstart">Quickstart</h2>
 
-  <h3>1. Set up the camera</h3>
-  <p>Measure your camera mount (see <a href="#calibration">Calibration</a>), then create the config:</p>
+  <h3>1. Set up Constants</h3>
+  <p>Every per-robot number lives in one editable file:
+  <a href="https://github.com/sidhuharjas/hvtest/blob/main/docs/examples/Constants.java"><code>Constants.java</code></a>
+  — copy it into TeamCode, measure your camera mount (see <a href="#calibration">Calibration</a>),
+  and paste your model's <code>labels.txt</code> names. Then build a Navigator from it:</p>
 <pre>
-VisionConfig config = new VisionConfig()
-        .camPitchDeg(25.0)      // tilt below horizontal, degrees
-        .camHeight(9.2)         // floor to lens center, inches
-        .ballHeight(3.0)        // floor to game element center, inches
-        .camXOffset(4.0)        // lens forward of robot center, inches
-        .camYOffset(0.0)        // lens left of robot center (+ left)
-        .minConfidence(0.44)    // ignore weak detections
-        .maxStalenessMs(120)    // discard stale data
-        .pipeline(3)            // Limelight pipeline index
-        .pollingRateHz(150);
-
-Limelight3A limelight = hardwareMap.get(Limelight3A.class, "limelight");
-HiveVision vision = new HiveVision(limelight, config);
-
-// optional: restrict which classes to chase (default = all three)
-vision.setAllowedClasses(
-        BiobuzzClasses.POLLEN,          // neutral yellow pollen
-        BiobuzzClasses.NECTAR_RED,      // alliance red nectar
-        BiobuzzClasses.NECTAR_BLUE);    // alliance blue nectar
+Navigator navigator = Constants.createNewNavigator(hardwareMap);
+navigator.setPoseSource(() -> new FieldPose(
+        follower.pose().x(), follower.pose().y(), follower.pose().heading()));
 </pre>
-  <p>Class IDs match the model labels: <code>POLLEN&nbsp;=&nbsp;0</code>, <code>NECTAR_RED&nbsp;=&nbsp;1</code>,
-  <code>NECTAR_BLUE&nbsp;=&nbsp;2</code>. Skip <code>setAllowedClasses</code> entirely to keep all three
-  enabled, or pass only the classes you want (e.g. <code>NECTAR_RED, NECTAR_BLUE</code> to ignore pollen).</p>
+  <p>Tracking uses model label names, not enums — next season you edit
+  <code>TRACKED_CLASSES</code> and <code>MODEL_LABELS</code> in that one file, nothing else.</p>
 
-  <h3>2. Ask for the closest target</h3>
-  <p>Pass your current pose so detections come back in field coordinates:</p>
+  <h3>2. The basic loop</h3>
+  <p>Update once per loop; ask for the closest target or a full route:</p>
 <pre>
-FieldPose robotPose = new FieldPose(
-        follower.pose().x(),
-        follower.pose().y(),
-        follower.pose().heading());
+while (opModeIsActive()) {
+    follower.update();
+    navigator.updateVision();                  // read camera, project onto the field
 
-Detection target = vision.detections()
-        .fetch(robotPose)
-        .sortByDistance()
-        .getClosest();
+    if (navigator.didDetect()) {
+        Detection ball = navigator.closest();  // nearest element, or null
+        telemetry.addData("Element", ball.getClassName());
 
-if (target != null) {
-    telemetry.addData("class", target.getBallClass());
-    telemetry.addData("field x", target.getX());
-    telemetry.addData("field y", target.getY());
+        PathResult route = navigator.returnPath();   // obstacle-avoiding Weaver route
+        if (route != null && !follower.isBusy()) {
+            follower.follow(PedroPathingConverter.toPath(route));
+        }
+    }
+    telemetry.update();
 }
 </pre>
-
-  <h3>3. Route a path through the detections</h3>
-  <p>The optional <code>weaver</code> module turns the same list into a Marrow path that dodges
-  obstacles. Feed it to Pedro Pathing and drive:</p>
-<pre>
-PathResult path = vision.detections()
-        .fetch(robotPose)
-        .sortByDistance()
-        .with(WeaverRoute.fromFetchPose()
-                .avoid(new CircleZone(new Point(72, 72), 18.0))
-                .maxTargets(4));
-
-if (path != null) {
-    follower.follow(PedroPathingConverter.toPath(path));
-}
-</pre>
-  <p><code>avoid(...)</code> zones are optional. <code>with(...)</code> returns <code>null</code>
-  when nothing was detected — always null-check.</p>
-  <p><code>PedroPathingConverter</code> is built into Marrow core itself, not Pedro:</p>
+  <p><code>returnPath()</code> returns <code>null</code> when nothing was detected — always
+  null-check. <code>PedroPathingConverter</code> is built into Marrow core itself, not Pedro:</p>
   <pre>import com.skeletonarmy.marrow.weaver.PedroPathingConverter;</pre>
 
+  <h3>3. Advanced: refine the plan (all optional)</h3>
+  <p>Everything extra is a fluent call chained before <code>returnPath()</code>:</p>
+<pre>
+navigator.updateVision()
+        .track("red_nectar", "blue_nectar")    // model labels, not enums
+        .maxObjects(2)                         // visit at most 2 elements
+        .clearance(6.0)                        // inches kept from obstacles
+        .sort(Sort.SIZE)                       // SHORTEST, LONGEST, SIZE, CONFIDENCE, COLOR, NONE
+        .avoid(new CircleZone(new Point(72, 72), 18.0));
+
+PathResult route = navigator.returnPath();
+</pre>
+  <p>Zones persist across loops — add them once at init (<code>clearZones()</code> resets).
+  The full 1.x surface is still available through <code>navigator.vision()</code> (the
+  <code>HiveVision</code> session) and <code>navigator.detections()</code> (the
+  <code>DetectionList</code> with <code>clampYDetections</code>, <code>with(...)</code>, and the rest).</p>
+
   <h2 id="examples">Run the examples</h2>
-  <p>Two finished OpModes ship in
+  <p>Ready-to-run files ship in
   <a href="https://github.com/sidhuharjas/hvtest/tree/main/docs/examples">docs/examples/</a>:</p>
   <table>
-    <tr><th>OpMode</th><th>What it does</th></tr>
+    <tr><th>File</th><th>What it does</th></tr>
     <tr>
-      <td><code>AutoBallHuntOpMode</code><br><span class="sub">"HiveVision Weaver Auto"</span></td>
+      <td><code>Constants.java</code></td>
+      <td>The one file you edit: camera mount, labels, hardware name, pathing defaults.</td>
+    </tr>
+    <tr>
+      <td><code>AutoBallHuntOpMode</code><br><span class="sub">"HiveVision Navigator Auto"</span></td>
       <td>One-shot autonomous. Detects targets, builds a Weaver route through the closest 2, drives it.</td>
     </tr>
     <tr>
@@ -280,31 +273,32 @@ if (path != null) {
     </tr>
   </table>
   <ol>
-    <li>Copy those two files plus <code>SampleFollowerFactory.java</code> into your TeamCode module
-        (they already declare <code>package org.firstinspires.ftc.teamcode</code>).</li>
-    <li>Fix the <code>VisionConfig</code> numbers for your camera mount. The config file expects the
-        Limelight under the hardware name <code>"limelight"</code> — rename it in your
-        <code>hardwareMap</code> / config if yours differs.</li>
+    <li>Copy the OpMode plus <code>Constants.java</code> and <code>SampleFollowerFactory.java</code>
+        into your TeamCode module (they already declare
+        <code>package org.firstinspires.ftc.teamcode</code>).</li>
+    <li>Edit <code>Constants.java</code> for your camera mount, labels, and hardware name — the
+        Limelight is expected under <code>"limelight"</code> unless you change
+        <code>LIMELIGHT_NAME</code>.</li>
     <li>Build and deploy TeamCode to the robot the way you normally ship code.</li>
-    <li>On the Driver Station pick <b>Autonomous → HiveVision Weaver Auto</b> (or the loop one),
+    <li>On the Driver Station pick <b>Autonomous → HiveVision Navigator Auto</b> (or the loop one),
         turn on the Limelight, press start.</li>
   </ol>
-  <p>Telemetry shows what it sees: closest element class, field X/Y, and route status. If it says
+  <p>Telemetry shows what it sees: closest element label, field X/Y, and route status. If it says
   &ldquo;No targets detected&rdquo;, check the Limelight pipeline index and that the game elements are
   inside the camera view.</p>
 
   <h2 id="calibration">Calibration</h2>
-  <p>Distance estimation comes from your camera geometry. Measure these once, write them down,
-  and positions on the field will line up:</p>
+  <p>Distance estimation comes from your camera geometry. Measure these once, write them into
+  <code>Constants.java</code>, and positions on the field will line up:</p>
   <table>
-    <tr><th>Method</th><th>What to measure</th></tr>
-    <tr><td><code>camHeight</code></td><td>Floor to lens center (inches)</td></tr>
-    <tr><td><code>ballHeight</code></td><td>Floor to game element center (inches)</td></tr>
-    <tr><td><code>camPitchDeg</code></td><td>Tilt below horizontal (degrees)</td></tr>
-    <tr><td><code>camXOffset</code></td><td>Lens forward of robot center (+ forward)</td></tr>
-    <tr><td><code>camYOffset</code></td><td>Lens left of robot center (+ left, − right)</td></tr>
-    <tr><td><code>minConfidence</code></td><td>Lowest confidence you trust (0.0–1.0)</td></tr>
-    <tr><td><code>maxStalenessMs</code></td><td>How old a detection may be (ms)</td></tr>
+    <tr><th>Constant</th><th>What to measure</th></tr>
+    <tr><td><code>CAM_HEIGHT</code></td><td>Floor to lens center (inches)</td></tr>
+    <tr><td><code>BALL_HEIGHT</code></td><td>Floor to game element center (inches)</td></tr>
+    <tr><td><code>CAM_PITCH_DEG</code></td><td>Tilt below horizontal (degrees)</td></tr>
+    <tr><td><code>CAM_X_OFFSET</code></td><td>Lens forward of robot center (+ forward)</td></tr>
+    <tr><td><code>CAM_Y_OFFSET</code></td><td>Lens left of robot center (+ left, − right)</td></tr>
+    <tr><td><code>MIN_CONFIDENCE</code></td><td>Lowest confidence you trust (0.0–1.0)</td></tr>
+    <tr><td><code>MAX_STALENESS_MS</code></td><td>How old a detection may be (ms)</td></tr>
   </table>
   <div class="note">
     If your robot is in CAD, pull the four geometry values from the assembly — it beats a tape

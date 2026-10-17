@@ -42,6 +42,11 @@ jobs:
       - name: Assemble Pages site
         run: |
           mkdir -p site
+          # Carry forward previously published versions (1.x) so pinned consumers keep resolving;
+          # the new build below overlays them.
+          if git fetch origin gh-pages:gh-pages 2>/dev/null; then
+            git archive gh-pages | tar -x -C site
+          fi
           cp -r "$HOME/.m2/repository/org" site/org
           cp -r pages/. site/
           find site -name "*.jar" -size 0 -delete

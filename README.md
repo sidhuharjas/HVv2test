@@ -2,28 +2,18 @@
 
 Camera-based detection, target filtering, field positioning, and Weaver path routing library for FTC robots.
 
-`HiveVision` turns Limelight 3A neural network detections into absolute field coordinates and generates optimal path routes for autonomous navigation. It is built natively for FTC game elements (such as `POLLEN`, `NECTAR_RED`, `NECTAR_BLUE`) using Limelight 3A SSD detectors and integrates seamlessly with [Pedro Pathing](https://github.com/pedropathing/core) and [Marrow Weaver](https://marrow.skeletonarmyftc.com/).
+`HiveVision` turns Limelight 3A neural network detections into absolute field coordinates and generates path routes for autonomous navigation. It is built for FTC game elements using Limelight 3A SSD detectors and integrates with [Pedro Pathing](https://github.com/pedropathing/core) and [Marrow Weaver](https://marrow.skeletonarmyftc.com/).
 
 **Docs & Maven repository:** [sidhuharjas.github.io/hvtest](https://sidhuharjas.github.io/hvtest)
 
 ---
 
-## Modules
-
-`HiveVision` is split into two lightweight artifacts:
-
-| Artifact | Description | Dependencies |
-|----------|-------------|--------------|
-| `org.hivevisionftc:core` | Perception pipeline, Limelight 3A integration, detection filtering, sorting, and camera-to-field coordinate projection. | FTC SDK (`RobotCore`, `Hardware`) |
-| `org.hivevisionftc:weaver` | Optional path routing module that converts detection lists into obstacle-avoiding [Marrow Weaver](https://marrow.skeletonarmyftc.com/) bezier paths. | `:core`, `Marrow core` |
-
----
-
 ## Installation
 
+A single artifact: vision, field projection, and route planning all ship in `core`.
 Artifacts are hosted on GitHub Pages — no Maven Central account or extra mirrors needed.
 
-Add the repository and dependencies to your `TeamCode/build.gradle`:
+Add the repository and dependency to your `TeamCode/build.gradle`:
 
 ```gradle
 repositories {
@@ -31,13 +21,12 @@ repositories {
 }
 
 dependencies {
-    // Core vision module
-    implementation 'org.hivevisionftc:core:1.0.0'
-
-    // Optional: Marrow Weaver route planning
-    implementation 'org.hivevisionftc:weaver:1.0.0'
+    implementation 'org.hivevisionftc:core:2.0.0'
 }
 ```
+
+> **Upgrading from 1.x:** delete the `org.hivevisionftc:weaver` line — route planning now
+> lives inside `core`. Keeping both on the classpath causes duplicate classes.
 
 Step-by-step setup, calibration, and usage: [sidhuharjas.github.io/hvtest](https://sidhuharjas.github.io/hvtest)
 
@@ -45,91 +34,77 @@ Step-by-step setup, calibration, and usage: [sidhuharjas.github.io/hvtest](https
 
 ## Quickstart
 
-### 1. Configure and Initialize Vision
+All the per-robot numbers live in one editable file: [`Constants.java`](docs/examples/Constants.java).
+Copy it into TeamCode, measure your camera mount, paste your model's `labels.txt` names, and
+build every Navigator from it:
 
 ```java
-// Define camera geometry and detection thresholds
-VisionConfig config = new VisionConfig()
-        .camPitchDeg(25.0)          // Camera tilt angle below horizontal
-        .camHeight(9.2)             // Camera lens height above floor (inches)
-        .ballHeight(3.0)            // Game element center height above floor (inches)
-        .camXOffset(4.0)            // Camera forward offset from robot center (inches)
-        .camYOffset(0.0)            // Camera left offset from robot center (inches)
-        .minConfidence(0.44)        // Minimum detection confidence threshold
-        .maxStalenessMs(120)        // Max allowed data staleness (ms)
-        .pipeline(3)                // Limelight pipeline index
-        .pollingRateHz(150);        // Camera polling rate
-
-// Initialize Limelight source & vision session
-Limelight3A limelight = hardwareMap.get(Limelight3A.class, "limelight");
-HiveVision vision = new HiveVision(limelight, config);
-
-// Optional: restrict which classes to chase (default = all three)
-vision.setAllowedClasses(
-        BiobuzzClasses.POLLEN,          // neutral yellow pollen
-        BiobuzzClasses.NECTAR_RED,      // alliance red nectar
-        BiobuzzClasses.NECTAR_BLUE);    // alliance blue nectar
+Navigator navigator = Constants.createNewNavigator(hardwareMap);
+navigator.setPoseSource(() -> new FieldPose(
+        follower.pose().x(), follower.pose().y(), follower.pose().heading()));
 ```
 
-### 2. Fetch and Query Detections
+### 1. The basic loop
 
 ```java
-// Fetch detections and project them to field coordinates given robot's current pose
-FieldPose robotPose = new FieldPose(follower.pose().x(), follower.pose().y(), follower.pose().heading());
+while (opModeIsActive()) {
+    follower.update();
+    navigator.updateVision();                  // read camera, project onto the field
 
-// Query the closest detected element
-Detection target = vision.detections()
-        .fetch(robotPose)
-        .sortByDistance()
-        .getClosest();
+    if (navigator.didDetect()) {
+        Detection ball = navigator.closest();  // nearest element, or null
+        telemetry.addData("Element", ball.getClassName());
 
-if (target != null) {
-    telemetry.addData("Target Class", target.getBallClass());
-    telemetry.addData("Target Field X", target.getX());
-    telemetry.addData("Target Field Y", target.getY());
+        PathResult route = navigator.returnPath();   // obstacle-avoiding Weaver route
+        if (route != null && !follower.isBusy()) {
+            follower.follow(PedroPathingConverter.toPath(route));
+        }
+    }
+    telemetry.update();
 }
 ```
 
-### 3. Generate Weaver Bezier Paths (Auto Routing)
+### 2. Advanced: refine the plan (all optional, all fluent)
 
 ```java
-// Convert detected elements directly into an obstacle-avoiding Weaver path result
-PathResult path = vision.detections()
-        .fetch(robotPose)
-        .sortByDistance()
-        .with(WeaverRoute.fromFetchPose()
-                .avoid(new CircleZone(new Point(72, 72), 18.0)) // Add obstacle zones
-                .maxTargets(4));                                // Limit path targets
+navigator.updateVision()
+        .track("red_nectar", "blue_nectar")    // model labels, not enums
+        .maxObjects(2)                         // visit at most 2 elements
+        .clearance(6.0)                        // inches kept from obstacles
+        .sort(Sort.SIZE)                       // SHORTEST, LONGEST, SIZE, CONFIDENCE, COLOR, NONE
+        .avoid(new CircleZone(new Point(72, 72), 18.0));  // zones persist; clearZones() resets
 
-if (path != null) {
-    follower.follow(PedroPathingConverter.toPath(path)); // import com.skeletonarmy.marrow.weaver.PedroPathingConverter
-}
+PathResult route = navigator.returnPath();
 ```
+
+### 3. The 1.x API, still available
+
+Everything from 1.x is still there: `navigator.vision()` returns the
+`HiveVision` session (`setAllowedClasses`, `track`, raw results) and `navigator.detections()`
+returns the `DetectionList` (`clampYDetections`, `getBiggest`, `with(WeaverRoute...)`).
 
 ---
 
 ## Running the Examples
 
-Two ready-to-run OpModes live in [`docs/examples/`](docs/examples/):
+Three ready-to-run files live in [`docs/examples/`](docs/examples/):
 
-| OpMode | Driver Station name | What it does |
-|--------|---------------------|--------------|
-| `AutoBallHuntOpMode` | HiveVision Weaver Auto | One-shot autonomous: detect, build a Weaver route through the closest 2 targets, drive it. |
-| `ManualBallChaseOpMode` | HiveVision Loop with Obstacles | Detection loop for the whole match; re-plans around an obstacle when the robot is idle. |
+| File | What it does |
+|------|--------------|
+| `Constants.java` | The one file you edit: camera mount, labels, pathing defaults. |
+| `AutoBallHuntOpMode` | One-shot autonomous: detect, build a Weaver route through the closest 2 targets, drive it. |
+| `ManualBallChaseOpMode` | Detection loop for the whole match; re-plans around an obstacle when the robot is idle. |
 
 To run one:
 
-1. Copy that OpMode plus `SampleFollowerFactory.java` into your TeamCode module
-   (both files already declare `package org.firstinspires.ftc.teamcode`).
-2. Adjust the `VisionConfig` values for your camera mount, and make sure the
-   Limelight is configured under the hardware name `"limelight"`.
+1. Copy that OpMode plus `Constants.java` and `SampleFollowerFactory.java` into your
+   TeamCode module (all already declare `package org.firstinspires.ftc.teamcode`).
+2. Edit `Constants.java` for your camera mount, labels, and hardware name.
 3. Build and deploy TeamCode to the robot as usual.
-4. On the Driver Station, select **Autonomous → HiveVision Weaver Auto** (or the
-   loop variant), power on the Limelight, and press start.
+4. On the Driver Station, select the OpMode, power on the Limelight, and press start.
 
-Telemetry reports the closest element class, field X/Y, and route status. If it
-says "No targets detected", check the Limelight pipeline index and that the game
-elements are in view.
+Telemetry reports the closest element label, field X/Y, and route status. If it says
+"No targets detected", check the Limelight pipeline index and that the game elements are in view.
 
 ---
 
@@ -137,25 +112,25 @@ elements are in view.
 
 Accurate distance estimation and field projection require proper physical measurement of your camera mounting geometry. Refer to [docs/calibration.md](docs/calibration.md) for step-by-step measurement procedures and coordinate system conventions.
 
-| Config Method | Description |
-|---------------|-------------|
-| `camPitchDeg(double)` | Downward tilt angle of the camera optic axis in degrees below horizontal. |
-| `camHeight(double)` | Distance from floor to center of camera lens (inches). |
-| `ballHeight(double)` | Distance from floor to center of target game element (inches). |
-| `camXOffset(double)` | Forward (+X) offset of camera lens relative to robot center (inches). |
-| `camYOffset(double)` | Left (+Y) offset of camera lens relative to robot center (inches, negative for right). |
-| `minConfidence(double)` | Confidence threshold for accepting detections (0.0 to 1.0). |
-| `maxStalenessMs(long)` | Maximum time in milliseconds before detection data is discarded. |
+| Constant (in `Constants.java`) | Description |
+|--------------------------------|-------------|
+| `CAM_PITCH_DEG` | Downward tilt angle of the camera optic axis in degrees below horizontal. |
+| `CAM_HEIGHT` | Distance from floor to center of camera lens (inches). |
+| `BALL_HEIGHT` | Distance from floor to center of target game element (inches) — half its diameter if it sits on the floor. |
+| `CAM_X_OFFSET` | Forward (+X) offset of camera lens relative to robot center (inches). |
+| `CAM_Y_OFFSET` | Left (+Y) offset of camera lens relative to robot center (inches, negative for right). |
+| `MIN_CONFIDENCE` | Confidence threshold for accepting detections (0.0 to 1.0). |
+| `MAX_STALENESS_MS` | Maximum time in milliseconds before detection data is discarded. |
+| `TRACKED_CLASSES` / `MODEL_LABELS` | Model label names to chase, and the full labels.txt list in class-id order. |
 
 ---
 
 ## Documentation & Examples
 
 - **[sidhuharjas.github.io/hvtest](https://sidhuharjas.github.io/hvtest)** — Setup guide, quickstart, and calibration summary.
-- **[MODULES.md](docs/MODULES.md)** — Complete API and class reference for `:core` and `:weaver`.
+- **[MODULES.md](docs/MODULES.md)** — Complete API and class reference.
 - **[calibration.md](docs/calibration.md)** — Procedure for measuring camera offsets, pitch angles, and understanding coordinate frames.
-- **[weaver/README.md](weaver/README.md)** — Quick guide to using the `WeaverRoute` extension.
-- **[docs/examples/](docs/examples/)** — Sample OpModes (`AutoBallHuntOpMode`, `ManualBallChaseOpMode`) demonstrating integration with Pedro Pathing — see [Running the Examples](#running-the-examples).
+- **[docs/examples/](docs/examples/)** — `Constants.java`, sample OpModes, and `SampleFollowerFactory` — see [Running the Examples](#running-the-examples).
 
 ---
 
@@ -188,7 +163,7 @@ along with them.
 To cut a release:
 
 1. Bump `version` in `build.gradle.kts`.
-2. Push a `v*` tag (`git tag v1.1.0 && git push --tags`), or run the workflow
+2. Push a `v*` tag (`git tag v2.0.0 && git push --tags`), or run the workflow
    manually from the Actions tab.
 
 Local testing uses the Deployer plugin configured in `build.gradle.kts`:

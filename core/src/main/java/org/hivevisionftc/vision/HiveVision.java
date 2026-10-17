@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -13,6 +14,8 @@ public class HiveVision {
     private final DetectionSource source;
     private final VisionConfig config;
     private final Set<BiobuzzClasses> allowedClasses;
+    private Set<String> trackedLabels;
+    private String[] modelLabels;
 
     public HiveVision(DetectionSource source, VisionConfig config) {
         this.source = source;
@@ -51,6 +54,45 @@ public class HiveVision {
         return allowedClasses;
     }
 
+    /**
+     * Tracks only these model labels (case-insensitive), e.g. {@code track("red_nectar")}.
+     * Label names, not enums, so a new season model only needs its labels.txt. Call with no
+     * arguments to track everything again.
+     */
+    public HiveVision track(String... labels) {
+        if (labels == null || labels.length == 0) {
+            trackedLabels = null;
+            return this;
+        }
+        Set<String> lowered = new HashSet<>();
+        for (String label : labels) {
+            if (label != null) lowered.add(label.toLowerCase(Locale.ROOT));
+        }
+        trackedLabels = lowered;
+        return this;
+    }
+
+    /** Label names in class-id order (the model's labels.txt). Fallback used by {@link #track}. */
+    public HiveVision modelLabels(String... labels) {
+        this.modelLabels = labels;
+        return this;
+    }
+
+    private boolean isTracked(Detection detection) {
+        if (trackedLabels == null) return true;
+        String label = labelOf(detection);
+        return label != null && trackedLabels.contains(label);
+    }
+
+    private String labelOf(Detection detection) {
+        String label = detection.getClassName();
+        if (label == null && modelLabels != null) {
+            int id = detection.getClassId();
+            if (id >= 0 && id < modelLabels.length) label = modelLabels[id];
+        }
+        return label == null ? null : label.toLowerCase(Locale.ROOT);
+    }
+
     /** Creates an empty {@link DetectionList} bound to this vision instance; call {@code fetch(...)} to fill it. */
     public DetectionList detections() {
         return new DetectionList();
@@ -67,8 +109,8 @@ public class HiveVision {
         // ─── Extension point ─────────────────────────────────────────────────────
 
         /**
-         * Hands this list to {@code fn} and returns whatever it produces. This is how optional modules
-         * (e.g. the Weaver integration) add behaviour without the core depending on them:
+         * Hands this list to {@code fn} and returns whatever it produces. This is how tools like
+         * WeaverRoute add behaviour without core knowing about them:
          * <pre>{@code
          * PathResult path = vision.detections().fetch(pose).sortByDistance().with(WeaverRoute.from(pose));
          * }</pre>
@@ -90,12 +132,14 @@ public class HiveVision {
 
             for (Detection detection : detections) {
                 if (!allowedClasses.contains(detection.getBallClass())) continue; // Skip disallowed colors
+                if (!isTracked(detection)) continue; // Skip labels outside track(...)
                 if (!config.ignoreConfidence() && detection.getConfidence() < config.getMinConfidence())
                     continue; // Skip low confidence detections
                 if (getStalenessMs() < 0 || getStalenessMs() > config.getMaxStalenessMs())
                     continue; // Skip if the latest detections are missing or too old
 
-                detectionList.add(getAbsolutePosition(detection, robotPose));
+                Detection fieldDetection = getAbsolutePosition(detection, robotPose);
+                if (fieldDetection != null) detectionList.add(fieldDetection);
             }
 
             return this;
@@ -104,14 +148,21 @@ public class HiveVision {
         public DetectionList fetch(FieldPose robotPose) {
             return fetch(robotPose.getX(), robotPose.getY());
         }
+
         // ─── Sorting ─────────────────────────────────────────────────────────────
+
+        /** Sorts by straight-line distance from the robot's pose ({@code closestFirst} for nearest-first). */
+        public DetectionList sortByDistance(boolean closestFirst) {
+            Comparator<Detection> byDistance = Comparator.comparingDouble(
+                    a -> Math.hypot(a.getX() - robotPose.getX(), a.getY() - robotPose.getY()));
+            detectionList.sort(closestFirst ? byDistance : byDistance.reversed());
+
+            return this;
+        }
 
         /** Sorts by straight-line distance from the robot's pose (closest first). */
         public DetectionList sortByDistance() {
-            detectionList.sort(Comparator.comparingDouble(
-                    a -> Math.hypot(a.getX() - robotPose.getX(), a.getY() - robotPose.getY())));
-
-            return this;
+            return sortByDistance(true);
         }
 
         /** Sorts by color ordinal ascending (POLLEN, NECTAR_RED, NECTAR_BLUE, UNKNOWN). */
@@ -133,6 +184,8 @@ public class HiveVision {
         }
 
         // ─── Filtering ───────────────────────────────────────────────────────────
+
+        /** Drops detections whose field y lies outside {@code [minY, maxY]}. */
         public DetectionList clampYDetections(double minY, double maxY) {
             detectionList.removeIf(d -> d.getY() < minY);
             detectionList.removeIf(d -> d.getY() > maxY);
@@ -165,9 +218,12 @@ public class HiveVision {
             return !detectionList.isEmpty();
         }
 
+        // ty is positive up, camPitch is tilt below horizontal: the ray's angle above the horizon
+        // is (ty - camPitch). NaN when the ray never meets the ball's plane (at or above the horizon).
         private double getDistance(double ty) {
-            double angleGoalRag = Math.toRadians(config.getCamPitchDeg() + ty);
-            return (config.getBallHeight() - config.getCamHeight()) / Math.tan(angleGoalRag);
+            double tan = Math.tan(Math.toRadians(ty - config.getCamPitchDeg()));
+            if (tan == 0.0) return Double.NaN;
+            return (config.getBallHeight() - config.getCamHeight()) / tan;
         }
 
         private FieldPose getRelativePose(double distance, double tx) {
@@ -189,8 +245,10 @@ public class HiveVision {
 
         private Detection getAbsolutePosition(Detection detection, FieldPose robotPose) {
             double distance = getDistance(detection.getY());
+            if (!Double.isFinite(distance) || distance <= 0) return null; // ray never reaches the ball
             FieldPose pose = getAbsolutePosition(getRelativePose(distance, detection.getX()), robotPose);
             return new Detection(detection, pose);
         }
     }
 }
+

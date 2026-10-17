@@ -17,8 +17,7 @@ import org.hivevisionftc.vision.HiveVision;
 /**
  * Plans a Marrow Weaver route through the detections in a {@link HiveVision.DetectionList}.
  *
- * <p>Plugs into the core through {@link HiveVision.DetectionList#with(Function)}, so the chain keeps flowing
- * and the core never depends on this module:
+ * <p>Plugs into the chain through {@link HiveVision.DetectionList#with(Function)}:
  *
  * <pre>{@code
  * PathResult path = vision.detections()
@@ -60,7 +59,7 @@ public final class WeaverRoute implements Function<HiveVision.DetectionList, Pat
     }
 
     /**
-     * Adds obstacle zones the route must bend around.
+     * Adds an obstacle zone the route must bend around.
      *
      * @param zone zone to avoid
      * @return this

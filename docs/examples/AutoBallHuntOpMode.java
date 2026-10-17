@@ -1,65 +1,50 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.pedropathing.follower.Follower;
-import com.skeletonarmy.marrow.weaver.PedroPathingConverter;
-import com.skeletonarmy.marrow.weaver.PathResult;
-import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import org.hivevisionftc.vision.BiobuzzClasses;
+import com.skeletonarmy.marrow.weaver.PedroPathingConverter;
+import com.skeletonarmy.marrow.weaver.PathResult;
+import org.hivevisionftc.vision.Detection;
 import org.hivevisionftc.vision.FieldPose;
-import org.hivevisionftc.vision.HiveVision;
-import org.hivevisionftc.vision.VisionConfig;
-import org.hivevisionftc.vision.weaver.WeaverRoute;
+import org.hivevisionftc.vision.Navigator;
 
 /**
  * Autonomous OpMode demonstrating target detection and Weaver route generation using HiveVision.
  */
-@Autonomous(name = "HiveVision Weaver Auto")
+@Autonomous(name = "HiveVision Navigator Auto")
 public class AutoBallHuntOpMode extends LinearOpMode {
 
     @Override
     public void runOpMode() {
         Follower follower = SampleFollowerFactory.create(hardwareMap);
-        Limelight3A limelight = hardwareMap.get(Limelight3A.class, "limelight");
-
-        // Define vision configuration parameters
-        VisionConfig config = new VisionConfig()
-                .camPitchDeg(25.0)
-                .camHeight(9.2)
-                .ballHeight(3.0)
-                .camXOffset(4.0)
-                .camYOffset(0.0)
-                .minConfidence(0.44)
-                .maxStalenessMs(120);
-
-        // Initialize HiveVision session
-        HiveVision vision = new HiveVision(limelight, config);
-        vision.setAllowedClasses(BiobuzzClasses.NECTAR_RED, BiobuzzClasses.NECTAR_BLUE);
+        Navigator navigator = Constants.createNewNavigator(hardwareMap);
+        navigator.setPoseSource(() -> new FieldPose(
+                follower.pose().x(),
+                follower.pose().y(),
+                follower.pose().heading()));
 
         telemetry.addData("Status", "Ready - press START");
         telemetry.update();
         waitForStart();
 
         if (opModeIsActive()) {
-            // Obtain current robot pose
-        FieldPose robotPose = new FieldPose(
-                follower.pose().x(),
-                follower.pose().y(),
-                follower.pose().heading());
+            navigator.updateVision();
 
-            // Fetch detections and generate a Weaver path route
-            PathResult pathResult = vision.detections()
-                    .fetch(robotPose)
-                    .sortByDistance()
-                    .with(WeaverRoute.fromFetchPose().maxTargets(2));
+            if (navigator.didDetect()) {
+                Detection closest = navigator.closest();
+                telemetry.addData("Closest Element", closest.getClassName());
+                telemetry.addData("Field X", closest.getX());
+                telemetry.addData("Field Y", closest.getY());
 
-            if (pathResult != null) {
-                follower.follow(PedroPathingConverter.toPath(pathResult));
-                while (opModeIsActive() && follower.isBusy()) {
-                    follower.update();
-                    telemetry.addData("Status", "Following generated route");
-                    telemetry.update();
+                PathResult route = navigator.returnPath();
+                if (route != null) {
+                    follower.follow(PedroPathingConverter.toPath(route));
+                    while (opModeIsActive() && follower.isBusy()) {
+                        follower.update();
+                        telemetry.addData("Status", "Following generated route");
+                        telemetry.update();
+                    }
                 }
             } else {
                 telemetry.addData("Status", "No targets detected");

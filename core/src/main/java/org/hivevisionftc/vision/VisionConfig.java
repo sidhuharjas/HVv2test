@@ -10,8 +10,8 @@ import java.util.Locale;
  * <pre>{@code
  * VisionConfig config = new VisionConfig()
  *         .camPitchDeg(25.0)
- *         .camH(9.2)
- *         .ballH(3.0)
+ *         .camHeight(9.2)
+ *         .ballHeight(3.0)
  *         .camXOffset(0.0)
  *         .camYOffset(0.0)
  *         .maxStalenessMs(120)
@@ -19,6 +19,13 @@ import java.util.Locale;
  * }</pre>
  */
 public class VisionConfig {
+    // --- Hardware ---
+
+    /**
+     * Hardware device name from the robot configuration.
+     */
+    private String hardwareName = "limelight";
+
     // --- Camera Geometry ---
 
     /**
@@ -54,7 +61,7 @@ public class VisionConfig {
     private long maxStalenessMs = 120;
 
     /**
-     * Minimum detection confidence threshold (range 0.0 to 1.0 or 0.0 to 100.0 depending on firmware).
+     * Minimum detection confidence threshold (Limelight detector confidence, 0.0 to 1.0).
      */
     private double minConfidence = 0.44;
 
@@ -72,6 +79,26 @@ public class VisionConfig {
      * The polling rate of the camera, in Hz.
      */
     private int pollingRateHz = 150;
+
+    /**
+     * Returns the hardware device name from the robot configuration.
+     *
+     * @return the hardware device name
+     */
+    public String getHardwareName() {
+        return hardwareName;
+    }
+
+    /**
+     * Sets the hardware device name from the robot configuration.
+     *
+     * @param v hardware device name (e.g. {@code "limelight"})
+     * @return this config, for chaining
+     */
+    public VisionConfig hardwareName(String v) {
+        this.hardwareName = v;
+        return this;
+    }
 
     /**
      * Returns the camera tilt angle below horizontal in degrees.
@@ -276,8 +303,10 @@ public class VisionConfig {
     public String toString() {
         return String.format(
                 Locale.ROOT,
-                "VisionConfig(camPitchDeg=%.3f, camHeight=%.3f, ballHeight=%.3f, camXOffset=%.3f, camYOffset=%.3f, "
-                        + "maxStalenessMs=%d, minConfidence=%.3f, ignoreConfidence=%b, pipeline=%d, pollingRateHz=%d)",
+                "VisionConfig(hardwareName=%s, camPitchDeg=%.3f, camHeight=%.3f, ballHeight=%.3f, "
+                        + "camXOffset=%.3f, camYOffset=%.3f, maxStalenessMs=%d, minConfidence=%.3f, "
+                        + "ignoreConfidence=%b, pipeline=%d, pollingRateHz=%d)",
+                hardwareName,
                 camPitchDeg,
                 camHeight,
                 ballHeight,

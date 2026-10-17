@@ -115,6 +115,6 @@ class NavigatorTest {
 
         assertNotNull(route);
         assertEquals(2, route.getVisitedTargets().size(), "maxObjects caps the route");
-        assertEquals(2, navigator.objects().size());
+        assertEquals(3, navigator.objects().size(), "but objects() is every detection");
     }
 }

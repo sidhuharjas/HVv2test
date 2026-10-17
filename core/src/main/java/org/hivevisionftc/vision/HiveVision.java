@@ -125,10 +125,14 @@ public class HiveVision {
         }
 
         public DetectionList fetch(double robotX, double robotY) {
+            return fetch(robotX, robotY, 0);
+        }
+
+        public DetectionList fetch(double robotX, double robotY, double robotHeading) {
             List<Detection> detections = source.latest();
             if (detections == null) return this;
             if (!detections.isEmpty()) detectionList.clear();
-            robotPose = new FieldPose(robotX, robotY);
+            robotPose = new FieldPose(robotX, robotY, robotHeading);
 
             for (Detection detection : detections) {
                 if (!allowedClasses.contains(detection.getBallClass())) continue; // Skip disallowed colors
@@ -146,7 +150,7 @@ public class HiveVision {
         }
 
         public DetectionList fetch(FieldPose robotPose) {
-            return fetch(robotPose.getX(), robotPose.getY());
+            return fetch(robotPose.getX(), robotPose.getY(), robotPose.getHeading());
         }
 
         // ─── Sorting ─────────────────────────────────────────────────────────────
